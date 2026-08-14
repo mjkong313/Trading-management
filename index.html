@@ -256,6 +256,56 @@
     <div style="font-size:13px;color:var(--warn);font-weight:600">⚠️ 매매 중 변경 금지. 변경은 주간 복기 시에만.</div>
   </div>
 
+  <div class="card" style="border:2px solid var(--ok)">
+    <div class="card-title" style="color:var(--ok)">🧭 7월 복기 룰 v1.1 <span style="color:var(--muted);font-weight:400">· 2026-08-14 · -5,215만원의 수업료</span></div>
+    <div style="font-size:12px;color:var(--bad);font-weight:700;margin-bottom:8px">물타기 금지. 신용 물타기 1회 = 그 달 신용 전면 중단.</div>
+    <div class="rule-item"><div class="l">01 · 1회 손실 한도</div><div class="r">순자산의 2%<br><span style="color:var(--muted);font-weight:400;font-size:12px">주문 전 손절가·수량 계산 (아래 계산기)</span></div></div>
+    <div class="rule-item"><div class="l">02 · 물타기</div><div class="r" style="color:var(--bad)">절대 금지<br><span style="color:var(--muted);font-weight:400;font-size:12px">추매는 +15% 위 피라미드만, 수량 절반씩</span></div></div>
+    <div class="rule-item"><div class="l">03 · 신용(융자)</div><div class="r">룰 02·05 통과 시만<br><span style="color:var(--bad);font-weight:400;font-size:12px">신용 물타기 1회 → 그 달 전면 중단</span></div></div>
+    <div class="rule-item"><div class="l">04 · 키팩터</div><div class="r">한 문장 못 쓰면 매수 금지<br><span style="color:var(--muted);font-weight:400;font-size:12px">ETF도 예외 없음</span></div></div>
+    <div class="rule-item"><div class="l">05 · 진입</div><div class="r">정배열 위에서만<br><span style="color:var(--muted);font-weight:400;font-size:12px">전일 +3% 위 추격 금지 · 9~10시 금지</span></div></div>
+    <div class="rule-item"><div class="l">06 · 청산(추세)</div><div class="r">50일선 이탈 → 2거래일 내 정리</div></div>
+    <div class="rule-item"><div class="l">07 · 청산(단타)</div><div class="r">1거래일 내 플러스 실패 시 청산</div></div>
+    <div class="rule-item"><div class="l">08 · 익절</div><div class="r">+10% 본전 스탑 · +30% 1/3 익절<br><span style="color:var(--muted);font-weight:400;font-size:12px">이후 추세 훼손까지 보유 · 손익비 3:1</span></div></div>
+    <div class="rule-item"><div class="l">09 · 서킷브레이커</div><div class="r" style="color:var(--bad)">월 -6% → 그 달 신규 매매 중단</div></div>
+    <div class="rule-item"><div class="l">10 · 기록</div><div class="r">매매일지 + 월간 복기<br><span style="color:var(--muted);font-weight:400;font-size:12px">결과가 아니라 원칙 준수를 채점</span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--ok)">🧮 손절가 계산기 — 룰 01</div>
+    <div class="tab-toggle" style="margin-bottom:10px">
+      <button type="button" id="jr-mode-stop" class="active" onclick="jrSetMode('stop')">손절가 계산</button>
+      <button type="button" id="jr-mode-qty" onclick="jrSetMode('qty')">수량 계산</button>
+    </div>
+    <label for="jr-nav">계좌 순자산 (원)</label>
+    <input type="number" id="jr-nav" inputmode="numeric" placeholder="예: 400000000 (4억)" oninput="jrCalc()">
+    <div id="jr-nav-echo" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+    <label for="jr-buy">매수가 (원)</label>
+    <input type="number" id="jr-buy" inputmode="numeric" placeholder="예: 267000" oninput="jrCalc()">
+    <div id="jr-qty-wrap">
+      <label for="jr-qty">매수 수량 (주)</label>
+      <input type="number" id="jr-qty" inputmode="numeric" placeholder="예: 300" oninput="jrCalc()">
+    </div>
+    <div id="jr-stop-wrap" style="display:none">
+      <label for="jr-stop">손절가 (원)</label>
+      <input type="number" id="jr-stop" inputmode="numeric" placeholder="예: 253000" oninput="jrCalc()">
+    </div>
+    <div id="jr-out" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:14px;color:var(--muted)">순자산·매수가·수량을 넣으면 룰에 맞는 손절가가 나온다.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--ok)">✅ 매수 전 30초 체크 — 5개 전부 ✓ 전에는 주문 금지</div>
+    <div id="jr-checklist">
+      <div class="check-item" onclick="jrToggle(this)"><div class="box"></div><div class="txt">오르는 이유(키팩터)를 한 문장으로 썼다</div></div>
+      <div class="check-item" onclick="jrToggle(this)"><div class="box"></div><div class="txt">손절가를 정했고, 그 손실은 순자산의 2% 이내다</div></div>
+      <div class="check-item" onclick="jrToggle(this)"><div class="box"></div><div class="txt">정배열 위 + 전일 대비 +3% 아래 + 10시 이후다</div></div>
+      <div class="check-item" onclick="jrToggle(this)"><div class="box"></div><div class="txt">신규/피라미드 진입이다 — 물타기가 아니다</div></div>
+      <div class="check-item" onclick="jrToggle(this)"><div class="box"></div><div class="txt">조급함이 아니라 논리 때문에 산다</div></div>
+    </div>
+    <div id="jr-verdict" style="margin-top:10px;font-weight:700;font-size:15px;color:var(--bad)">0/5 — 아직 주문 금지</div>
+    <div class="btn-row"><button class="btn ghost btn-sm" type="button" onclick="jrReset()">체크 초기화</button></div>
+  </div>
+
   <div class="card">
     <div class="card-title">🏷️ 카테고리 정의</div>
     <div class="rule-item"><div class="l">트레이딩</div><div class="r">단기 모멘텀<br><span style="color:var(--muted);font-weight:400;font-size:12px">~3개월</span></div></div>
@@ -1029,6 +1079,72 @@ function escapeHtml(s){
 
 /* ============ INIT ============ */
 renderHome();
+</script>
+<style>
+/* 7월의 룰: 매수 전 체크는 통과=초록 (시장충격 체크의 빨강과 구분) */
+#jr-checklist .check-item.checked .box{background:var(--ok);border-color:var(--ok)}
+#jr-checklist .check-item.checked .txt{color:var(--ok)}
+</style>
+<script>
+/* ============ 7월의 룰 v1.1 (2026-08-14 복기) ============ */
+let jrMode = 'stop';
+const jrWon = v => Math.round(v).toLocaleString('ko-KR');
+function jrUk(v){
+  if(!(v>0)) return '';
+  const eok = Math.floor(v/1e8), man = Math.round((v-eok*1e8)/1e4);
+  return '= ' + (eok? eok+'억 ':'') + (man? man.toLocaleString()+'만':'') + (!eok&&!man? jrWon(v):'') + '원';
+}
+function jrSetMode(m){
+  jrMode = m;
+  document.getElementById('jr-mode-stop').classList.toggle('active', m==='stop');
+  document.getElementById('jr-mode-qty').classList.toggle('active', m==='qty');
+  document.getElementById('jr-qty-wrap').style.display = m==='stop'?'':'none';
+  document.getElementById('jr-stop-wrap').style.display = m==='qty'?'':'none';
+  jrCalc();
+}
+function jrCalc(){
+  const g = id => parseFloat(document.getElementById(id).value);
+  const out = document.getElementById('jr-out');
+  const nav = g('jr-nav'), bp = g('jr-buy');
+  document.getElementById('jr-nav-echo').textContent = nav>0 ? jrUk(nav) : '';
+  try{ localStorage.setItem('jr-nav-won', document.getElementById('jr-nav').value); }catch(e){}
+  const warn = t => '<div style="color:var(--bad);font-weight:600;margin-top:6px">'+t+'</div>';
+  if(!(nav>0)){ out.innerHTML='순자산부터 원 단위로 입력 (4억이면 400000000).'; return; }
+  const risk = nav*0.02;
+  const riskLine = '허용 손실(2%) '+jrWon(risk)+'원';
+  if(!(bp>0)){ out.innerHTML = riskLine+' · 매수가까지 입력.'; return; }
+  if(jrMode==='stop'){
+    const q = g('jr-qty');
+    if(!(q>0)){ out.innerHTML = riskLine+' · 수량까지 입력하면 손절가가 나온다.'; return; }
+    const per = risk/q, sp = bp-per, pct = per/bp*100, amt = q*bp;
+    if(sp<=0){ out.innerHTML = riskLine+' · 이 수량은 전액 손실도 2% 이내 — 손절가는 추세 기준(룰 06)으로.'; return; }
+    out.innerHTML =
+      '<div style="color:var(--text)">손절가 <span style="font-size:20px;font-weight:800;color:var(--ok)">'+jrWon(Math.floor(sp/10)*10)+'원</span> <span style="color:var(--muted)">(-'+pct.toFixed(1)+'%)</span></div>'+
+      '<div style="margin-top:4px">'+riskLine+' · 포지션 '+jrWon(amt)+'원 ('+(amt/nav*100).toFixed(0)+'%)</div>'+
+      (pct<3 ? warn('손절폭 -'+pct.toFixed(1)+'%는 너무 타이트 — 수량을 줄여라.') : '')+
+      (pct>10 ? warn('손절폭 -10% 초과 — 손익비 3:1이면 +'+(pct*3).toFixed(0)+'% 이상 기대돼야 한다.') : '');
+  } else {
+    const sp = g('jr-stop');
+    if(!(sp>0)){ out.innerHTML = riskLine+' · 손절가까지 입력하면 최대 수량이 나온다.'; return; }
+    if(sp>=bp){ out.innerHTML = warn('손절가가 매수가보다 높거나 같다 — 다시.'); return; }
+    const per = bp-sp, q = Math.floor(risk/per), amt = q*bp, pct = per/bp*100;
+    out.innerHTML =
+      '<div style="color:var(--text)">최대 수량 <span style="font-size:20px;font-weight:800;color:var(--ok)">'+q.toLocaleString()+'주</span></div>'+
+      '<div style="margin-top:4px">'+riskLine+' · 손절폭 -'+pct.toFixed(1)+'% · 포지션 '+jrWon(amt)+'원 ('+(amt/nav*100).toFixed(0)+'%)</div>'+
+      (pct>10 ? warn('손절폭 -10% 초과 — 손익비 3:1이면 +'+(pct*3).toFixed(0)+'% 이상 기대돼야 한다.') : '');
+  }
+}
+function jrVerdict(){
+  const items = [...document.querySelectorAll('#jr-checklist .check-item')];
+  const n = items.filter(i=>i.classList.contains('checked')).length;
+  const v = document.getElementById('jr-verdict');
+  if(n===items.length){ v.textContent='5/5 — 주문해도 된다. 수량은 위 계산기로.'; v.style.color='var(--ok)'; }
+  else { v.textContent=n+'/5 — 아직 주문 금지'; v.style.color='var(--bad)'; }
+}
+function jrToggle(el){ el.classList.toggle('checked'); jrVerdict(); }
+function jrReset(){ document.querySelectorAll('#jr-checklist .check-item').forEach(i=>i.classList.remove('checked')); jrVerdict(); }
+try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementById('jr-nav').value = nv; }catch(e){}
+jrCalc();
 </script>
 </body>
 </html>
