@@ -1444,7 +1444,14 @@ function vOutHtml(d, r){
     const col = r.pos<0.33?'var(--ok)':(r.pos>0.72?'var(--bad)':'var(--warn)');
     h += '<div style="margin-top:8px;font-size:12.5px">밴드 '+d.lo+'~'+d.hi+' → 하단가 <b>'+vFmtWon(r.loPx)+'</b> · 상단가 <b>'+vFmtWon(r.hiPx)+'</b></div>';
     h += '<div style="height:8px;border-radius:4px;background:var(--card2);margin-top:6px;position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;border-radius:4px;background:'+col+'"></div></div>';
-    h += '<div style="font-size:12px;margin-top:4px;color:'+col+';font-weight:700">밴드 내 위치 '+pct+'% — '+(r.pos<0.33?'하단권 (진입 검토 구간, 단 트리거 확인)':(r.pos>0.72?'상단권 (과열 — 1/3~1/2 익절 검토)':'중간 (손익비 우위 없음)'))+'</div>';
+    // 손익비 = (상단가까지 업사이드) ÷ (하단가까지 다운사이드)
+    const up = r.hiPx - d.price, dn = d.price - r.loPx;
+    let rrTxt, rrCol;
+    if (dn <= 0){ rrTxt = '∞ : 1 (하단 아래)'; rrCol = 'var(--ok)'; }
+    else if (up <= 0){ rrTxt = '0 : 1 (상단 위 — 업사이드 없음)'; rrCol = 'var(--bad)'; }
+    else { const rr = up/dn; rrTxt = rr.toFixed(1)+' : 1'; rrCol = rr>=3?'var(--ok)':(rr<1?'var(--bad)':'var(--warn)'); }
+    h += '<div style="font-size:12px;margin-top:4px;color:'+col+';font-weight:700">밴드 내 위치 '+pct+'% · <span style="color:'+rrCol+'">손익비 '+rrTxt+'</span> — '+(r.pos<0.33?'하단권 (진입 검토 구간, 단 트리거 확인)':(r.pos>0.72?'상단권 (과열 — 1/3~1/2 익절 검토)':'중간 (손익비 우위 없음)'))+'</div>';
+    h += '<div style="font-size:11px;margin-top:2px;color:var(--muted)">업사이드 +'+(up>0?(up/d.price*100).toFixed(0):'0')+'% vs 다운사이드 -'+(dn>0?(dn/d.price*100).toFixed(0):'0')+'% · 룰 08 기준 3:1 이상이면 진입 후보</div>';
   }
   return h;
 }
