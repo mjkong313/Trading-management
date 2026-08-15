@@ -1387,13 +1387,13 @@ const vFmtWon = p => p >= 1e4 ? Math.round(p).toLocaleString('ko-KR')+'원' : p.
 /* 강의에 나온 밴드 프리셋 (원문 수치 그대로) */
 const V_BANDS = {
   pbr: [
-    ['SK하이닉스 0.8 ~ 2.2', 0.8, 2.2],
-    ['삼성전자 0.8 ~ 2.0', 0.8, 2.0],
+    ['SK하이닉스 0.8 ~ 3.6', 0.8, 3.6],
+    ['삼성전자 0.8 ~ 2.2', 0.8, 2.2],
     ['GS건설 0.3 ~ 2.0', 0.3, 2.0],
     ['삼성엔지니어링 0.7 ~ 7.0', 0.7, 7.0],
   ],
   per: [
-    ['성장주 표준 15 ~ 30 (강의 기본)', 15, 30],
+    ['성장주 표준 16 ~ 30 (강의 기본)', 16, 30],
     ['시장 평균 10 ~ 11', 10, 11],
     ['저성장주 6 ~ 8', 6, 8],
     ['현대일렉 16 ~ 30', 16, 30],
@@ -1512,7 +1512,7 @@ function vLoad(){
     // 최초 1회 기본 시드: SK하이닉스 (2026-08 와이즈리포트 기준). 사용자가 지우면 다시 안 살아남
     if (!a.length && !localStorage.getItem('jr-vals-seeded')){
       a = [{id:1, m:'pbr', name:'SK하이닉스', price:1645000, shares:7.3, cap:120.7, profit:80, profit2:NaN,
-            growth:NaN, lo:0.8, hi:2.2, key:'메모리 가격 + HBM 물량 — 매달 1일 수출데이터 확인', t:'2026-08-15'}];
+            growth:NaN, lo:0.8, hi:3.6, key:'메모리 가격 + HBM 물량 — 매달 1일 수출데이터 확인', t:'2026-08-15'}];
       localStorage.setItem('jr-vals', JSON.stringify(a));
       localStorage.setItem('jr-vals-seeded','1');
     }
