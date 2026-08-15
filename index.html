@@ -408,6 +408,10 @@
       <div><label>올해 순이익 추정 (조원)</label><input type="number" id="v-profit" inputmode="decimal" step="0.1" placeholder="80" oninput="vCalc()"></div>
       <div><label>내년 순이익 추정 (조원)</label><input type="number" id="v-profit2" inputmode="decimal" step="0.1" placeholder="12M fwd용 (비우면 연말 기준)" oninput="vCalc()"></div>
       <div id="v-g-wrap" style="display:none"><label>이익 성장률 (%)</label><input type="number" id="v-growth" inputmode="decimal" placeholder="50" oninput="vCalc()"></div>
+    </div>
+    <label>밸류 밴드 (강의 프리셋)</label>
+    <select id="v-band" onchange="vBandSel()"></select>
+    <div id="v-band-custom" style="display:none;grid-template-columns:1fr 1fr;gap:0 10px">
       <div><label>밴드 하단 (배)</label><input type="number" id="v-lo" inputmode="decimal" step="0.1" placeholder="0.8" oninput="vCalc()"></div>
       <div><label>밴드 상단 (배)</label><input type="number" id="v-hi" inputmode="decimal" step="0.1" placeholder="2.2" oninput="vCalc()"></div>
     </div>
@@ -1380,13 +1384,56 @@ function jrToggle(el){ el.classList.toggle('checked'); jrVerdict(); }
 let vM = 'pbr', vEditId = null;
 const vG = id => parseFloat(document.getElementById(id).value);
 const vFmtWon = p => p >= 1e4 ? Math.round(p).toLocaleString('ko-KR')+'원' : p.toFixed(0)+'원';
+/* 강의에 나온 밴드 프리셋 (원문 수치 그대로) */
+const V_BANDS = {
+  pbr: [
+    ['SK하이닉스 0.8 ~ 2.2', 0.8, 2.2],
+    ['삼성전자 0.8 ~ 2.0', 0.8, 2.0],
+    ['GS건설 0.3 ~ 2.0', 0.3, 2.0],
+    ['삼성엔지니어링 0.7 ~ 7.0', 0.7, 7.0],
+  ],
+  per: [
+    ['성장주 표준 15 ~ 30 (강의 기본)', 15, 30],
+    ['시장 평균 10 ~ 11', 10, 11],
+    ['저성장주 6 ~ 8', 6, 8],
+    ['현대일렉 16 ~ 30', 16, 30],
+  ],
+  peg: [
+    ['표준 0.5 ~ 2.0 (기준 1.0)', 0.5, 2.0],
+    ['보수적 0.5 ~ 1.5', 0.5, 1.5],
+  ],
+};
+function vBandFill(selLo, selHi){
+  const sel = document.getElementById('v-band');
+  const opts = V_BANDS[vM];
+  let html = '<option value="">밴드 안 씀</option>';
+  opts.forEach((o,i)=>{ html += '<option value="'+i+'">'+o[0]+'</option>'; });
+  html += '<option value="c">직접 입력…</option>';
+  sel.innerHTML = html;
+  // 기존 lo/hi 값과 일치하는 프리셋이 있으면 선택 복원
+  if (selLo>0 && selHi>0){
+    const i = opts.findIndex(o=>o[1]===selLo && o[2]===selHi);
+    sel.value = i>=0 ? String(i) : 'c';
+  }
+  vBandSel(true);
+}
+function vBandSel(keep){
+  const sel = document.getElementById('v-band');
+  const custom = document.getElementById('v-band-custom');
+  if (sel.value === 'c'){ custom.style.display = 'grid'; }
+  else {
+    custom.style.display = 'none';
+    if (sel.value === ''){ document.getElementById('v-lo').value=''; document.getElementById('v-hi').value=''; }
+    else { const o = V_BANDS[vM][+sel.value]; document.getElementById('v-lo').value=o[1]; document.getElementById('v-hi').value=o[2]; }
+  }
+  if (!keep) vCalc(); else vCalc();
+}
 function vMode(m){
   vM = m;
   ['pbr','per','peg'].forEach(x=>document.getElementById('v-m-'+x).classList.toggle('active', x===m));
   document.getElementById('v-cap-wrap').style.display = m==='pbr'?'':'none';
   document.getElementById('v-g-wrap').style.display = m==='peg'?'':'none';
-  document.getElementById('v-lo').placeholder = m==='pbr'?'0.8':(m==='per'?'15':'0.5');
-  document.getElementById('v-hi').placeholder = m==='pbr'?'2.2':(m==='per'?'30':'2');
+  vBandFill(NaN, NaN);
   vCalc();
 }
 function vCompute(d){
@@ -1487,7 +1534,7 @@ function vSave(){
 }
 function vClear(){
   ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
-  vEditId = null; vCalc();
+  vEditId = null; vBandFill(NaN, NaN); vCalc();
 }
 function vEdit(id){
   const d = vLoad().find(x=>x.id===id); if(!d) return;
@@ -1495,6 +1542,7 @@ function vEdit(id){
   const set=(i,v)=>document.getElementById(i).value = (v==null||isNaN(v))?'':v;
   document.getElementById('v-name').value=d.name; document.getElementById('v-key').value=d.key;
   set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-profit2',d.profit2); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
+  vBandFill(d.lo, d.hi);
   vCalc(); window.scrollTo(0,0);
 }
 function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); }
@@ -1521,7 +1569,7 @@ function lecShow(who){
 }
 function jrReset(){ document.querySelectorAll('#jr-checklist .check-item').forEach(i=>i.classList.remove('checked')); jrVerdict(); }
 try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementById('jr-nav').value = nv; }catch(e){}
-jrCalc(); renderVals(); vCalc();
+jrCalc(); renderVals(); vBandFill(NaN, NaN); vCalc();
 </script>
 </body>
 </html>
