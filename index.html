@@ -422,6 +422,15 @@
       <div><label>밴드 하단 (배)</label><input type="number" id="v-lo" inputmode="decimal" step="0.1" placeholder="0.8" oninput="vCalc()"></div>
       <div><label>밴드 상단 (배)</label><input type="number" id="v-hi" inputmode="decimal" step="0.1" placeholder="2.2" oninput="vCalc()"></div>
     </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+      <div style="font-size:12px;color:var(--trading);font-weight:700;letter-spacing:.5px">내 포지션 (선택) — 넣으면 2% 룰 손절가·트레일링 스탑 계산</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">
+        <div><label>진입가 (원)</label><input type="number" id="v-entry" inputmode="numeric" placeholder="1500000" oninput="vCalc()"></div>
+        <div><label>수량 (주)</label><input type="number" id="v-qty" inputmode="numeric" placeholder="30" oninput="vCalc()"></div>
+      </div>
+      <label>계좌 순자산 (원) — 룰 탭과 공유</label>
+      <input type="number" id="v-nav" inputmode="numeric" placeholder="400000000" oninput="vNavSync()">
+    </div>
     <label>키팩터 한 문장 (룰 04 — 못 쓰면 저장 불가)</label>
     <input type="text" id="v-key" placeholder="예: 메모리 가격 + HBM 물량. 매달 1일 수출데이터 확인" maxlength="80">
     <div id="v-out" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:14px;color:var(--muted)">숫자를 넣으면 계산 결과가 나온다.</div>
@@ -1513,7 +1522,54 @@ function vRead(){
   return {m:vM, name:document.getElementById('v-name').value.trim(),
     price:vG('v-price'), shares:vG('v-shares'), cap:vG('v-cap'),
     profit:vG('v-profit'), profit2:vG('v-profit2'), growth:vG('v-growth'), lo:vG('v-lo'), hi:vG('v-hi'),
+    entry:vG('v-entry'), qty:vG('v-qty'),
     key:document.getElementById('v-key').value.trim()};
+}
+function vNav(){ const n = parseFloat(localStorage.getItem('jr-nav-won')||''); return n>0?n:NaN; }
+function vNavSync(){
+  const v = document.getElementById('v-nav').value;
+  try{ localStorage.setItem('jr-nav-won', v); }catch(e){}
+  const jr = document.getElementById('jr-nav'); if(jr) jr.value = v;
+  if (typeof jrCalc==='function') jrCalc();
+  vCalc();
+}
+/* 그레이 5강 트레일링 스탑 사다리: 수익률 도달 시 스탑을 끌어올린다 */
+const V_LADDER = [[1.00,0.80,'+100% → +80% 확보'],[0.50,0.30,'+50% → +30% 확보'],
+                  [0.20,0.10,'+20% → +10% 확보'],[0.10,0.00,'+10% → 본전 스탑']];
+function vPosHtml(d){
+  if (!(d.entry>0) || !(d.qty>0)) return '';
+  const nav = vNav(), amt = d.entry*d.qty;
+  const warn = t => '<div style="color:var(--bad);font-weight:600;margin-top:4px">'+t+'</div>';
+  let h = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">';
+  h += '<div style="font-size:12px;color:var(--trading);font-weight:700">내 포지션 · 리스크 (그레이 룰)</div>';
+  h += '<div style="margin-top:4px">'+d.qty.toLocaleString()+'주 × '+vFmtWon(d.entry)+' = <b>'+vFmtWon(amt)+'</b>'+
+       (nav>0? ' <span style="color:'+(amt/nav>0.2?'var(--bad)':'var(--muted)')+'">(순자산의 '+(amt/nav*100).toFixed(0)+'%'+(amt/nav>0.2?' — 20% 초과':'')+')</span>':'')+'</div>';
+  if (!(nav>0)) return h + warn('순자산을 입력하면 2% 룰 손절가가 계산된다.') + '</div>';
+  // 2% 룰 초기 손절가
+  const risk = nav*0.02, per = risk/d.qty, stop0 = d.entry - per, pct0 = per/d.entry*100;
+  if (stop0 <= 0){
+    h += '<div style="margin-top:4px">허용 손실(2%) '+vFmtWon(risk)+' — 이 수량은 전액 손실도 2% 이내. 손절가는 추세 기준(룰 06)으로.</div>';
+  } else {
+    h += '<div style="margin-top:4px">초기 손절가 <b style="color:var(--bad)">'+vFmtWon(Math.floor(stop0/10)*10)+'</b> (-'+pct0.toFixed(1)+'%) · 허용 손실(2%) '+vFmtWon(risk)+'</div>';
+    if (pct0 > 10) h += warn('손절폭 -10% 초과 — 수량을 줄여야 룰 08 손익비 3:1이 성립한다.');
+    else if (pct0 < 3) h += warn('손절폭 -'+pct0.toFixed(1)+'%는 너무 타이트 — 일반 변동에도 걸린다.');
+  }
+  // 현재가 대비 트레일링
+  if (d.price>0){
+    const gain = d.price/d.entry - 1;
+    const pnl = (d.price-d.entry)*d.qty;
+    h += '<div style="margin-top:6px">현재 평가 '+(gain>=0?'+':'')+(gain*100).toFixed(1)+'% · '+(pnl>=0?'+':'')+vFmtWon(Math.abs(pnl)).replace('원',(pnl<0?'원 손실':'원 이익'))+'</div>';
+    const step = V_LADDER.find(s=>gain >= s[0]-1e-9);   // 1.2-1=0.1999… 같은 부동소수점 오차 보정
+    if (step){
+      const trail = d.entry*(1+step[1]);
+      h += '<div style="margin-top:4px;color:var(--ok);font-weight:700">트레일링 스탑 '+vFmtWon(Math.floor(trail/10)*10)+' — '+step[2]+'</div>';
+      if (gain>=0.30) h += '<div style="font-size:12px;color:var(--warn);margin-top:2px">+30% 돌파 — 룰 08: 1/3 익절 검토</div>';
+    } else {
+      const nxt = V_LADDER[V_LADDER.length-1];
+      h += '<div style="margin-top:4px;color:var(--muted)">아직 초기 손절 구간 — +10%('+vFmtWon(Math.floor(d.entry*1.1/10)*10)+') 도달 시 스탑을 본전으로 올린다.</div>';
+    }
+  }
+  return h + '</div>';
 }
 function vOutHtml(d, r){
   if (!r) return '필수: 주가·주식수·이익 추정' + (d.m==='pbr'?'·자본총계':'') + (d.m==='peg'?'·성장률':'') + '.';
@@ -1543,7 +1599,7 @@ function vOutHtml(d, r){
 }
 function vCalc(){
   const d = vRead();
-  document.getElementById('v-out').innerHTML = vOutHtml(d, vCompute(d));
+  document.getElementById('v-out').innerHTML = vOutHtml(d, vCompute(d)) + vPosHtml(d);
 }
 function vLoad(){
   try{
@@ -1572,7 +1628,7 @@ function vSave(){
   vStore(a); vEditId = null; vClear(); renderVals(); toast('저장 완료','ok');
 }
 function vClear(){
-  ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
+  ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-entry','v-qty','v-key'].forEach(id=>document.getElementById(id).value='');
   vEditId = null; vStockFill(NaN); vBandFill(NaN, NaN); vCalc();
 }
 function vEdit(id){
@@ -1581,6 +1637,7 @@ function vEdit(id){
   const set=(i,v)=>document.getElementById(i).value = (v==null||isNaN(v))?'':v;
   document.getElementById('v-name').value=d.name; document.getElementById('v-key').value=d.key;
   set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-profit2',d.profit2); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
+  set('v-entry',d.entry); set('v-qty',d.qty);
   vStockFill(d.shares, d.name); vBandFill(d.lo, d.hi);
   vCalc(); window.scrollTo(0,0);
 }
@@ -1594,7 +1651,7 @@ function renderVals(){
     const mode = d.m==='pbr'?'PBR 포워드':(d.m==='per'?'PER 포워드':'PEG');
     return '<div class="card" style="border-left:4px solid var(--invest)">'+
       '<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">'+escapeHtml(d.name)+'</b><span style="font-size:11px;color:var(--muted)">'+d.t+' · '+mode+'</span></div>'+
-      '<div style="margin-top:6px;font-size:13.5px">'+vOutHtml(d,r)+'</div>'+
+      '<div style="margin-top:6px;font-size:13.5px">'+vOutHtml(d,r)+vPosHtml(d)+'</div>'+
       '<div style="font-size:12.5px;color:var(--warn);margin-top:8px">🔑 '+escapeHtml(d.key)+'</div>'+
       '<div class="btn-row"><button class="btn ghost btn-sm" onclick="vEdit('+d.id+')">수정</button><button class="btn bad btn-sm" onclick="vDel('+d.id+')">삭제</button></div>'+
     '</div>';
@@ -1608,7 +1665,9 @@ function lecShow(who){
 }
 function jrReset(){ document.querySelectorAll('#jr-checklist .check-item').forEach(i=>i.classList.remove('checked')); jrVerdict(); }
 try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementById('jr-nav').value = nv; }catch(e){}
-jrCalc(); renderVals(); vStockFill(NaN); vBandFill(NaN, NaN); vCalc();
+jrCalc(); renderVals(); vStockFill(NaN); vBandFill(NaN, NaN);
+try{ const nv2 = localStorage.getItem('jr-nav-won'); if(nv2) document.getElementById('v-nav').value = nv2; }catch(e){}
+vCalc();
 </script>
 </body>
 </html>
