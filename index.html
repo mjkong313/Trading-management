@@ -1459,7 +1459,19 @@ function vCalc(){
   const d = vRead();
   document.getElementById('v-out').innerHTML = vOutHtml(d, vCompute(d));
 }
-function vLoad(){ try{ return JSON.parse(localStorage.getItem('jr-vals')||'[]'); }catch(e){ return []; } }
+function vLoad(){
+  try{
+    let a = JSON.parse(localStorage.getItem('jr-vals')||'[]');
+    // 최초 1회 기본 시드: SK하이닉스 (2026-08 와이즈리포트 기준). 사용자가 지우면 다시 안 살아남
+    if (!a.length && !localStorage.getItem('jr-vals-seeded')){
+      a = [{id:1, m:'pbr', name:'SK하이닉스', price:1645000, shares:7.3, cap:120.7, profit:80, profit2:NaN,
+            growth:NaN, lo:0.8, hi:2.2, key:'메모리 가격 + HBM 물량 — 매달 1일 수출데이터 확인', t:'2026-08-15'}];
+      localStorage.setItem('jr-vals', JSON.stringify(a));
+      localStorage.setItem('jr-vals-seeded','1');
+    }
+    return a;
+  }catch(e){ return []; }
+}
 function vStore(a){ try{ localStorage.setItem('jr-vals', JSON.stringify(a)); }catch(e){} }
 function vSave(){
   const d = vRead();
