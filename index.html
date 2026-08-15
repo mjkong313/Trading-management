@@ -214,6 +214,11 @@
   </div>
 
   <div class="card">
+    <div class="card-title">📐 보유 포지션 <span class="accent">(밸류 노트)</span></div>
+    <div id="home-positions"></div>
+  </div>
+
+  <div class="card">
     <div class="card-title">🚨 시장 충격 체크 <span class="accent">(매매 전 확인)</span></div>
     <div id="market-check"></div>
     <div style="margin-top:10px;padding:10px;background:rgba(245,158,11,.1);border-radius:8px;font-size:12px;color:var(--warn)">
@@ -843,6 +848,9 @@ function renderHome(){
   document.getElementById('stat-winrate').textContent = closed.length?Math.round(wins/closed.length*100)+'%':'-';
   document.getElementById('stat-entry-rule').textContent = entryTotal?Math.round(entryOk/entryTotal*100)+'%':'-';
   document.getElementById('stat-exit-rule').textContent = exitTotal?Math.round(exitOk/exitTotal*100)+'%':'-';
+
+  // 밸류 노트 포지션 (밸류 탭에서 저장한 진입가·수량)
+  if (typeof renderHomePositions === 'function') renderHomePositions();
 
   // Market check
   resetMarketCheckIfNewDay();
@@ -1536,41 +1544,87 @@ function vNavSync(){
 /* 그레이 5강 트레일링 스탑 사다리: 수익률 도달 시 스탑을 끌어올린다 */
 const V_LADDER = [[1.00,0.80,'+100% → +80% 확보'],[0.50,0.30,'+50% → +30% 확보'],
                   [0.20,0.10,'+20% → +10% 확보'],[0.10,0.00,'+10% → 본전 스탑']];
+/* 포지션 리스크 계산 — 밸류 탭과 홈 탭이 공유 */
+function vStopInfo(d){
+  if (!(d.entry>0) || !(d.qty>0)) return null;
+  const o = {nav: vNav(), amt: d.entry*d.qty};
+  if (o.nav>0){
+    o.risk = o.nav*0.02;
+    o.per = o.risk/d.qty;
+    o.stop0 = d.entry - o.per;              // 2% 룰 초기 손절가
+    o.pct0 = o.per/d.entry*100;
+  }
+  if (d.price>0){
+    o.gain = d.price/d.entry - 1;
+    o.pnl = (d.price-d.entry)*d.qty;
+    const step = V_LADDER.find(s=>o.gain >= s[0]-1e-9);   // 1.2-1=0.1999… 부동소수점 보정
+    if (step){ o.trail = d.entry*(1+step[1]); o.trailLabel = step[2]; }
+  }
+  // 실제 걸어둘 스탑 = 트레일링과 초기 손절 중 높은 쪽
+  const cands = [o.trail, o.stop0>0?o.stop0:null].filter(v=>v!=null);
+  if (cands.length) o.active = Math.max.apply(null, cands);
+  return o;
+}
+const vRound10 = v => Math.floor(v/10)*10;
 function vPosHtml(d){
-  if (!(d.entry>0) || !(d.qty>0)) return '';
-  const nav = vNav(), amt = d.entry*d.qty;
+  const o = vStopInfo(d); if (!o) return '';
   const warn = t => '<div style="color:var(--bad);font-weight:600;margin-top:4px">'+t+'</div>';
   let h = '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">';
   h += '<div style="font-size:12px;color:var(--trading);font-weight:700">내 포지션 · 리스크 (그레이 룰)</div>';
-  h += '<div style="margin-top:4px">'+d.qty.toLocaleString()+'주 × '+vFmtWon(d.entry)+' = <b>'+vFmtWon(amt)+'</b>'+
-       (nav>0? ' <span style="color:'+(amt/nav>0.2?'var(--bad)':'var(--muted)')+'">(순자산의 '+(amt/nav*100).toFixed(0)+'%'+(amt/nav>0.2?' — 20% 초과':'')+')</span>':'')+'</div>';
-  if (!(nav>0)) return h + warn('순자산을 입력하면 2% 룰 손절가가 계산된다.') + '</div>';
-  // 2% 룰 초기 손절가
-  const risk = nav*0.02, per = risk/d.qty, stop0 = d.entry - per, pct0 = per/d.entry*100;
-  if (stop0 <= 0){
-    h += '<div style="margin-top:4px">허용 손실(2%) '+vFmtWon(risk)+' — 이 수량은 전액 손실도 2% 이내. 손절가는 추세 기준(룰 06)으로.</div>';
+  h += '<div style="margin-top:4px">'+d.qty.toLocaleString()+'주 × '+vFmtWon(d.entry)+' = <b>'+vFmtWon(o.amt)+'</b>'+
+       (o.nav>0? ' <span style="color:'+(o.amt/o.nav>0.2?'var(--bad)':'var(--muted)')+'">(순자산의 '+(o.amt/o.nav*100).toFixed(0)+'%'+(o.amt/o.nav>0.2?' — 20% 초과':'')+')</span>':'')+'</div>';
+  if (!(o.nav>0)) return h + warn('순자산을 입력하면 2% 룰 손절가가 계산된다.') + '</div>';
+  if (!(o.stop0>0)){
+    h += '<div style="margin-top:4px">허용 손실(2%) '+vFmtWon(o.risk)+' — 이 수량은 전액 손실도 2% 이내. 손절가는 추세 기준(룰 06)으로.</div>';
   } else {
-    h += '<div style="margin-top:4px">초기 손절가 <b style="color:var(--bad)">'+vFmtWon(Math.floor(stop0/10)*10)+'</b> (-'+pct0.toFixed(1)+'%) · 허용 손실(2%) '+vFmtWon(risk)+'</div>';
-    if (pct0 > 10) h += warn('손절폭 -10% 초과 — 수량을 줄여야 룰 08 손익비 3:1이 성립한다.');
-    else if (pct0 < 3) h += warn('손절폭 -'+pct0.toFixed(1)+'%는 너무 타이트 — 일반 변동에도 걸린다.');
+    h += '<div style="margin-top:4px">초기 손절가 <b style="color:var(--bad)">'+vFmtWon(vRound10(o.stop0))+'</b> (-'+o.pct0.toFixed(1)+'%) · 허용 손실(2%) '+vFmtWon(o.risk)+'</div>';
+    if (o.pct0 > 10) h += warn('손절폭 -10% 초과 — 수량을 줄여야 룰 08 손익비 3:1이 성립한다.');
+    else if (o.pct0 < 3) h += warn('손절폭 -'+o.pct0.toFixed(1)+'%는 너무 타이트 — 일반 변동에도 걸린다.');
   }
-  // 현재가 대비 트레일링
-  if (d.price>0){
-    const gain = d.price/d.entry - 1;
-    const pnl = (d.price-d.entry)*d.qty;
-    h += '<div style="margin-top:6px">현재 평가 '+(gain>=0?'+':'')+(gain*100).toFixed(1)+'% · '+(pnl>=0?'+':'')+vFmtWon(Math.abs(pnl)).replace('원',(pnl<0?'원 손실':'원 이익'))+'</div>';
-    const step = V_LADDER.find(s=>gain >= s[0]-1e-9);   // 1.2-1=0.1999… 같은 부동소수점 오차 보정
-    if (step){
-      const trail = d.entry*(1+step[1]);
-      h += '<div style="margin-top:4px;color:var(--ok);font-weight:700">트레일링 스탑 '+vFmtWon(Math.floor(trail/10)*10)+' — '+step[2]+'</div>';
-      if (gain>=0.30) h += '<div style="font-size:12px;color:var(--warn);margin-top:2px">+30% 돌파 — 룰 08: 1/3 익절 검토</div>';
+  if (o.gain != null){
+    h += '<div style="margin-top:6px">현재 평가 '+(o.gain>=0?'+':'')+(o.gain*100).toFixed(1)+'% · '+(o.pnl>=0?'+':'')+vFmtWon(Math.abs(o.pnl)).replace('원',(o.pnl<0?'원 손실':'원 이익'))+'</div>';
+    if (o.trail != null){
+      h += '<div style="margin-top:4px;color:var(--ok);font-weight:700">트레일링 스탑 '+vFmtWon(vRound10(o.trail))+' — '+o.trailLabel+'</div>';
+      if (o.gain>=0.30) h += '<div style="font-size:12px;color:var(--warn);margin-top:2px">+30% 돌파 — 룰 08: 1/3 익절 검토</div>';
     } else {
-      const nxt = V_LADDER[V_LADDER.length-1];
-      h += '<div style="margin-top:4px;color:var(--muted)">아직 초기 손절 구간 — +10%('+vFmtWon(Math.floor(d.entry*1.1/10)*10)+') 도달 시 스탑을 본전으로 올린다.</div>';
+      h += '<div style="margin-top:4px;color:var(--muted)">아직 초기 손절 구간 — +10%('+vFmtWon(vRound10(d.entry*1.1))+') 도달 시 스탑을 본전으로 올린다.</div>';
     }
   }
   return h + '</div>';
 }
+/* 홈 탭 — 밸류 노트에 저장된 포지션 요약 */
+function renderHomePositions(){
+  const el = document.getElementById('home-positions');
+  if (!el) return;
+  const list = (typeof vLoad==='function' ? vLoad() : []).filter(d=>d.entry>0 && d.qty>0);
+  if (!list.length){
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted)">밸류 탭에서 진입가·수량을 넣고 저장하면 여기에 바로 표시됩니다.</div>';
+    return;
+  }
+  el.innerHTML = list.slice().reverse().map(d=>{
+    const o = vStopInfo(d);
+    const g = o.gain;
+    const cls = g==null ? '' : (g>=0?'pos':'neg');
+    const gTxt = g==null ? '현재가 미입력' : (g>=0?'+':'')+(g*100).toFixed(1)+'%';
+    let stopLine = '';
+    if (o.active != null){
+      const isTrail = o.trail != null && o.active === o.trail;
+      stopLine = '<div class="trade-meta" style="color:'+(isTrail?'var(--ok)':'var(--bad)')+';font-weight:600">🛑 스탑 '+
+        vFmtWon(vRound10(o.active))+' · '+(isTrail? o.trailLabel : '초기 손절 (2% 룰)')+'</div>';
+    } else if (!(o.nav>0)){
+      stopLine = '<div class="trade-meta" style="color:var(--warn)">순자산 미입력 — 밸류/룰 탭에서 넣으면 스탑이 계산됩니다</div>';
+    }
+    return '<div class="trade-card investment" onclick="goValue()" style="cursor:pointer">'+
+      '<div class="trade-row"><span class="trade-ticker">'+escapeHtml(d.name||'(이름 없음)')+'</span>'+
+        '<span class="trade-pnl '+cls+'">'+gTxt+'</span></div>'+
+      '<div class="trade-meta">진입 '+vFmtWon(d.entry)+(d.price>0? ' → 현재 '+vFmtWon(d.price):'')+' · '+d.qty.toLocaleString()+'주 · '+vFmtWon(o.amt)+
+        (o.pnl!=null? ' · 평가 '+(o.pnl>=0?'+':'-')+vFmtWon(Math.abs(o.pnl)):'')+'</div>'+
+      stopLine +
+      (o.gain!=null && o.gain>=0.30 ? '<div class="trade-meta" style="color:var(--warn)">+30% 돌파 — 1/3 익절 검토</div>' : '')+
+    '</div>';
+  }).join('');
+}
+function goValue(){ showScreen('value', document.querySelector('[data-screen="value"]')); }
 function vOutHtml(d, r){
   if (!r) return '필수: 주가·주식수·이익 추정' + (d.m==='pbr'?'·자본총계':'') + (d.m==='peg'?'·성장률':'') + '.';
   const cur = d.m==='peg'? r.peg : r.mult;
@@ -1625,7 +1679,7 @@ function vSave(){
   d.t = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
   if (vEditId!==null){ d.id = vEditId; const i = a.findIndex(x=>x.id===vEditId); if(i>=0) a[i]=d; else a.push(d); }
   else { d.id = Date.now(); a.push(d); }
-  vStore(a); vEditId = null; vClear(); renderVals(); toast('저장 완료','ok');
+  vStore(a); vEditId = null; vClear(); renderVals(); renderHomePositions(); toast('저장 완료 — 홈 탭에도 반영됨','ok');
 }
 function vClear(){
   ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-entry','v-qty','v-key'].forEach(id=>document.getElementById(id).value='');
@@ -1641,7 +1695,7 @@ function vEdit(id){
   vStockFill(d.shares, d.name); vBandFill(d.lo, d.hi);
   vCalc(); window.scrollTo(0,0);
 }
-function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); }
+function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); renderHomePositions(); }
 function renderVals(){
   const a = vLoad(), el = document.getElementById('v-list');
   if (!a.length){ el.innerHTML = '<div class="card" style="color:var(--muted);font-size:13px">저장된 밸류 기록이 없습니다. 종목마다 계산해서 쌓아두면 나만의 밴드 노트가 된다.</div>'; return; }
@@ -1668,6 +1722,7 @@ try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementBy
 jrCalc(); renderVals(); vStockFill(NaN); vBandFill(NaN, NaN);
 try{ const nv2 = localStorage.getItem('jr-nav-won'); if(nv2) document.getElementById('v-nav').value = nv2; }catch(e){}
 vCalc();
+renderHomePositions();   // renderHome()은 이 스크립트보다 먼저 돌아서 여기서 한 번 더 그린다
 </script>
 </body>
 </html>
