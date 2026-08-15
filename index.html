@@ -399,11 +399,12 @@
       <button type="button" id="v-m-per" onclick="vMode('per')">PER 포워드</button>
       <button type="button" id="v-m-peg" onclick="vMode('peg')">PEG</button>
     </div>
-    <label>종목명</label>
-    <input type="text" id="v-name" placeholder="예: SK하이닉스" maxlength="20">
+    <label>종목 (주식수 프리셋)</label>
+    <select id="v-stock" onchange="vStockSel()"></select>
+    <input type="text" id="v-name" placeholder="종목명" maxlength="20" style="margin-top:8px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">
       <div><label>현재 주가 (원)</label><input type="number" id="v-price" inputmode="numeric" placeholder="1645000" oninput="vCalc()"></div>
-      <div><label>발행주식수 (억주)</label><input type="number" id="v-shares" inputmode="decimal" step="0.1" placeholder="7.3" oninput="vCalc()"></div>
+      <div id="v-shares-wrap" style="display:none"><label>발행주식수 (억주)</label><input type="number" id="v-shares" inputmode="decimal" step="0.01" placeholder="7.3" oninput="vCalc()"></div>
       <div id="v-cap-wrap"><label>전년말 자본총계 (조원)</label><input type="number" id="v-cap" inputmode="decimal" step="0.1" placeholder="120.7" oninput="vCalc()"></div>
       <div><label>올해 순이익 추정 (조원)</label><input type="number" id="v-profit" inputmode="decimal" step="0.1" placeholder="80" oninput="vCalc()"></div>
       <div><label>내년 순이익 추정 (조원)</label><input type="number" id="v-profit2" inputmode="decimal" step="0.1" placeholder="12M fwd용 (비우면 연말 기준)" oninput="vCalc()"></div>
@@ -1384,6 +1385,38 @@ function jrToggle(el){ el.classList.toggle('checked'); jrVerdict(); }
 let vM = 'pbr', vEditId = null;
 const vG = id => parseFloat(document.getElementById(id).value);
 const vFmtWon = p => p >= 1e4 ? Math.round(p).toLocaleString('ko-KR')+'원' : p.toFixed(0)+'원';
+/* 강의에 나온 발행주식수 프리셋 (억주) */
+const V_STOCKS = [
+  ['SK하이닉스 — 7.3억주', 'SK하이닉스', 7.3],
+  ['삼성전자 — 60억주', '삼성전자', 60],
+  ['삼양식품 — 0.75억주', '삼양식품', 0.75],
+  ['한화에어로스페이스 — 0.5억주', '한화에어로스페이스', 0.5],
+  ['HD현대일렉트릭 — 0.36억주', 'HD현대일렉트릭', 0.36],
+];
+function vStockFill(shares, name){
+  const sel = document.getElementById('v-stock');
+  let html = '';
+  V_STOCKS.forEach((o,i)=>{ html += '<option value="'+i+'">'+o[0]+'</option>'; });
+  html += '<option value="c">직접 입력…</option>';
+  sel.innerHTML = html;
+  if (shares>0){
+    const i = V_STOCKS.findIndex(o=>o[2]===shares && (!name || o[1]===name));
+    sel.value = i>=0 ? String(i) : 'c';
+  } else sel.value = '0';
+  vStockSel(true);
+}
+function vStockSel(keep){
+  const sel = document.getElementById('v-stock');
+  const wrap = document.getElementById('v-shares-wrap');
+  if (sel.value === 'c'){ wrap.style.display = ''; }
+  else {
+    wrap.style.display = 'none';
+    const o = V_STOCKS[+sel.value];
+    document.getElementById('v-shares').value = o[2];
+    if (!keep) document.getElementById('v-name').value = o[1];
+  }
+  vCalc();
+}
 /* 강의에 나온 밴드 프리셋 (원문 수치 그대로) */
 const V_BANDS = {
   pbr: [
@@ -1534,7 +1567,7 @@ function vSave(){
 }
 function vClear(){
   ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
-  vEditId = null; vBandFill(NaN, NaN); vCalc();
+  vEditId = null; vStockFill(NaN); vBandFill(NaN, NaN); vCalc();
 }
 function vEdit(id){
   const d = vLoad().find(x=>x.id===id); if(!d) return;
@@ -1542,7 +1575,7 @@ function vEdit(id){
   const set=(i,v)=>document.getElementById(i).value = (v==null||isNaN(v))?'':v;
   document.getElementById('v-name').value=d.name; document.getElementById('v-key').value=d.key;
   set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-profit2',d.profit2); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
-  vBandFill(d.lo, d.hi);
+  vStockFill(d.shares, d.name); vBandFill(d.lo, d.hi);
   vCalc(); window.scrollTo(0,0);
 }
 function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); }
@@ -1569,7 +1602,7 @@ function lecShow(who){
 }
 function jrReset(){ document.querySelectorAll('#jr-checklist .check-item').forEach(i=>i.classList.remove('checked')); jrVerdict(); }
 try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementById('jr-nav').value = nv; }catch(e){}
-jrCalc(); renderVals(); vBandFill(NaN, NaN); vCalc();
+jrCalc(); renderVals(); vStockFill(NaN); vBandFill(NaN, NaN); vCalc();
 </script>
 </body>
 </html>
