@@ -404,8 +404,9 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">
       <div><label>현재 주가 (원)</label><input type="number" id="v-price" inputmode="numeric" placeholder="1645000" oninput="vCalc()"></div>
       <div><label>발행주식수 (억주)</label><input type="number" id="v-shares" inputmode="decimal" step="0.1" placeholder="7.3" oninput="vCalc()"></div>
-      <div id="v-cap-wrap"><label>기말 자본총계 (조원)</label><input type="number" id="v-cap" inputmode="decimal" step="0.1" placeholder="120.7" oninput="vCalc()"></div>
+      <div id="v-cap-wrap"><label>전년말 자본총계 (조원)</label><input type="number" id="v-cap" inputmode="decimal" step="0.1" placeholder="120.7" oninput="vCalc()"></div>
       <div><label>올해 순이익 추정 (조원)</label><input type="number" id="v-profit" inputmode="decimal" step="0.1" placeholder="80" oninput="vCalc()"></div>
+      <div><label>내년 순이익 추정 (조원)</label><input type="number" id="v-profit2" inputmode="decimal" step="0.1" placeholder="12M fwd용 (비우면 연말 기준)" oninput="vCalc()"></div>
       <div id="v-g-wrap" style="display:none"><label>이익 성장률 (%)</label><input type="number" id="v-growth" inputmode="decimal" placeholder="50" oninput="vCalc()"></div>
       <div><label>밴드 하단 (배)</label><input type="number" id="v-lo" inputmode="decimal" step="0.1" placeholder="0.8" oninput="vCalc()"></div>
       <div><label>밴드 상단 (배)</label><input type="number" id="v-hi" inputmode="decimal" step="0.1" placeholder="2.2" oninput="vCalc()"></div>
@@ -1389,19 +1390,26 @@ function vMode(m){
   vCalc();
 }
 function vCompute(d){
-  // d: {m, price, shares(억주), cap(조), profit(조), growth(%), lo, hi}
+  // d: {m, price, shares(억주), cap(조), profit(조), profit2(조, 내년), growth(%), lo, hi}
   const r = {};
   if (!(d.price>0) || !(d.shares>0) || !(d.profit>0)) return null;
   const sh = d.shares*1e8;
   r.mcap = d.price*sh/1e12;                       // 조
+  // 연중 경과율 p: 1/1이면 0, 12/31이면 ~1 — 항상 '지금부터 12개월' 기준을 만들기 위한 보간
+  const now = new Date();
+  const p = Math.min(1, (now - new Date(now.getFullYear(),0,1)) / (365.25*24*3600*1000));
+  r.p = p; r.has2 = d.profit2>0;
   if (d.m==='pbr'){
     if (!(d.cap>0)) return null;
-    r.fwdCap = d.cap + d.profit;
-    r.mult = r.mcap / r.fwdCap; r.unit='배 (F-PBR)';
+    // 12M fwd 자본 = 전년말 자본 + 올해 이익 + p×내년 이익 (내년 추정 없으면 연말 기준으로 폴백)
+    r.fwdCap = d.cap + d.profit + (r.has2 ? p*d.profit2 : 0);
+    r.mult = r.mcap / r.fwdCap; r.unit='배 (12M F-PBR)';
     r.bandPx = b => b*r.fwdCap*1e12/sh;
   } else {
-    r.mult = r.mcap / d.profit; r.unit='배 (F-PER)';
-    r.bandPx = b => b*d.profit*1e12/sh;
+    // 12M fwd 이익 = (1-p)×올해 + p×내년 (내년 추정 없으면 올해분만)
+    r.fwdEarn = r.has2 ? (1-p)*d.profit + p*d.profit2 : d.profit;
+    r.mult = r.mcap / r.fwdEarn; r.unit='배 (12M F-PER)';
+    r.bandPx = b => b*r.fwdEarn*1e12/sh;
     if (d.m==='peg'){
       if (!(d.growth>0)) return null;
       r.peg = r.mult/d.growth; r.unit2='배 (PEG, 기준 1.0)';
@@ -1418,14 +1426,18 @@ function vCompute(d){
 function vRead(){
   return {m:vM, name:document.getElementById('v-name').value.trim(),
     price:vG('v-price'), shares:vG('v-shares'), cap:vG('v-cap'),
-    profit:vG('v-profit'), growth:vG('v-growth'), lo:vG('v-lo'), hi:vG('v-hi'),
+    profit:vG('v-profit'), profit2:vG('v-profit2'), growth:vG('v-growth'), lo:vG('v-lo'), hi:vG('v-hi'),
     key:document.getElementById('v-key').value.trim()};
 }
 function vOutHtml(d, r){
   if (!r) return '필수: 주가·주식수·이익 추정' + (d.m==='pbr'?'·자본총계':'') + (d.m==='peg'?'·성장률':'') + '.';
   const cur = d.m==='peg'? r.peg : r.mult;
   let h = '<div style="color:var(--text)">시총 '+r.mcap.toFixed(1)+'조' +
-    (d.m==='pbr'? ' · 포워드 자본 <b style="color:var(--warn)">'+r.fwdCap.toFixed(1)+'조</b>':'') + '</div>';
+    (d.m==='pbr'? ' · 12M fwd 자본 <b style="color:var(--warn)">'+r.fwdCap.toFixed(1)+'조</b>':'') +
+    (d.m!=='pbr'&&r.fwdEarn? ' · 12M fwd 이익 <b style="color:var(--warn)">'+r.fwdEarn.toFixed(1)+'조</b>':'') + '</div>';
+  h += '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">'+(r.has2
+    ? '연중 경과 '+Math.round(r.p*100)+'% 반영 — 지금부터 12개월 기준'
+    : '⚠ 내년 추정 미입력 → 올해 연말 기준 ('+(12-Math.round(r.p*12))+'개월 fwd). 항상 12M로 보려면 내년 순이익을 넣어라')+'</div>';
   h += '<div style="margin-top:4px;color:var(--text)">현재 <span style="font-size:20px;font-weight:800;color:var(--invest)">'+cur.toFixed(2)+'</span> <span style="color:var(--muted)">'+(d.m==='peg'? r.unit2 : r.unit)+'</span>'+(d.m==='peg'? ' <span style="color:var(--muted)">(F-PER '+r.mult.toFixed(0)+'배 ÷ 성장 '+d.growth+'%)</span>':'')+'</div>';
   if (r.loPx){
     const pct = Math.round(r.pos*100);
@@ -1455,7 +1467,7 @@ function vSave(){
   vStore(a); vEditId = null; vClear(); renderVals(); toast('저장 완료','ok');
 }
 function vClear(){
-  ['v-name','v-price','v-shares','v-cap','v-profit','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
+  ['v-name','v-price','v-shares','v-cap','v-profit','v-profit2','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
   vEditId = null; vCalc();
 }
 function vEdit(id){
@@ -1463,7 +1475,7 @@ function vEdit(id){
   vMode(d.m); vEditId = id;
   const set=(i,v)=>document.getElementById(i).value = (v==null||isNaN(v))?'':v;
   document.getElementById('v-name').value=d.name; document.getElementById('v-key').value=d.key;
-  set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
+  set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-profit2',d.profit2); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
   vCalc(); window.scrollTo(0,0);
 }
 function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); }
