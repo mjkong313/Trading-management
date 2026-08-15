@@ -388,6 +388,41 @@
   </div>
 </section>
 
+<!-- ============== VALUATION ============== -->
+<section class="screen" id="screen-value">
+  <div class="header"><h1>📐 밸류 노트</h1><div class="date">포워드 자본 암산 — 채상욱式</div></div>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--invest)">새 계산 <span style="color:var(--muted);font-weight:400">· 포워드 자본 = 기말 자본 + 올해 이익 추정</span></div>
+    <div class="tab-toggle" style="margin-bottom:4px">
+      <button type="button" id="v-m-pbr" class="active" onclick="vMode('pbr')">PBR 포워드</button>
+      <button type="button" id="v-m-per" onclick="vMode('per')">PER 포워드</button>
+      <button type="button" id="v-m-peg" onclick="vMode('peg')">PEG</button>
+    </div>
+    <label>종목명</label>
+    <input type="text" id="v-name" placeholder="예: SK하이닉스" maxlength="20">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">
+      <div><label>현재 주가 (원)</label><input type="number" id="v-price" inputmode="numeric" placeholder="1645000" oninput="vCalc()"></div>
+      <div><label>발행주식수 (억주)</label><input type="number" id="v-shares" inputmode="decimal" step="0.1" placeholder="7.3" oninput="vCalc()"></div>
+      <div id="v-cap-wrap"><label>기말 자본총계 (조원)</label><input type="number" id="v-cap" inputmode="decimal" step="0.1" placeholder="120.7" oninput="vCalc()"></div>
+      <div><label>올해 순이익 추정 (조원)</label><input type="number" id="v-profit" inputmode="decimal" step="0.1" placeholder="80" oninput="vCalc()"></div>
+      <div id="v-g-wrap" style="display:none"><label>이익 성장률 (%)</label><input type="number" id="v-growth" inputmode="decimal" placeholder="50" oninput="vCalc()"></div>
+      <div><label>밴드 하단 (배)</label><input type="number" id="v-lo" inputmode="decimal" step="0.1" placeholder="0.8" oninput="vCalc()"></div>
+      <div><label>밴드 상단 (배)</label><input type="number" id="v-hi" inputmode="decimal" step="0.1" placeholder="2.2" oninput="vCalc()"></div>
+    </div>
+    <label>키팩터 한 문장 (룰 04 — 못 쓰면 저장 불가)</label>
+    <input type="text" id="v-key" placeholder="예: 메모리 가격 + HBM 물량. 매달 1일 수출데이터 확인" maxlength="80">
+    <div id="v-out" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;font-size:14px;color:var(--muted)">숫자를 넣으면 계산 결과가 나온다.</div>
+    <div class="btn-row"><button class="btn ok" type="button" onclick="vSave()">저장</button><button class="btn ghost" type="button" onclick="vClear()">비우기</button></div>
+  </div>
+
+  <div class="card" style="background:rgba(245,158,11,.08);border:1px solid var(--warn)">
+    <div style="font-size:12px;color:var(--warn);line-height:1.6">참고: 자본총계·순이익은 와이즈리포트/DART에서. 자본 증가 = 순이익 − 배당 ± 기타 (배당은 암산에서 무시). 어떤 이익 추정을 넣느냐에 따라 멀티플이 달라진다 — 밸류는 정답이 아니라 설명력.</div>
+  </div>
+
+  <div id="v-list"></div>
+</section>
+
 <!-- ============== LECTURES ============== -->
 <section class="screen" id="screen-lectures">
   <div class="header"><h1>🎓 강의노트</h1><div class="date">주식부자 · 채상욱 6강 + 그레이 5강</div></div>
@@ -595,6 +630,10 @@
     <svg viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
     강의
   </button>
+  <button data-screen="value" onclick="showScreen('value',this)">
+    <svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h2M14 11h2M8 15h2M14 15h2M8 19h2M14 19h2"/></svg>
+    밸류
+  </button>
 </nav>
 
 <!-- ============== MODALS ============== -->
@@ -744,6 +783,7 @@ function showScreen(name,btn){
   if(name==='home')renderHome();
   if(name==='trades')renderTrades();
   if(name==='review')renderReview();
+  if(name==='value'&&typeof renderVals==='function')renderVals();
   if(name==='notes')renderNotes();
 }
 
@@ -1335,6 +1375,113 @@ function jrVerdict(){
   else { v.textContent=n+'/5 — 아직 주문 금지'; v.style.color='var(--bad)'; }
 }
 function jrToggle(el){ el.classList.toggle('checked'); jrVerdict(); }
+/* ── 밸류 노트 (포워드 자본 암산) ── */
+let vM = 'pbr', vEditId = null;
+const vG = id => parseFloat(document.getElementById(id).value);
+const vFmtWon = p => p >= 1e4 ? Math.round(p).toLocaleString('ko-KR')+'원' : p.toFixed(0)+'원';
+function vMode(m){
+  vM = m;
+  ['pbr','per','peg'].forEach(x=>document.getElementById('v-m-'+x).classList.toggle('active', x===m));
+  document.getElementById('v-cap-wrap').style.display = m==='pbr'?'':'none';
+  document.getElementById('v-g-wrap').style.display = m==='peg'?'':'none';
+  document.getElementById('v-lo').placeholder = m==='pbr'?'0.8':(m==='per'?'15':'0.5');
+  document.getElementById('v-hi').placeholder = m==='pbr'?'2.2':(m==='per'?'30':'2');
+  vCalc();
+}
+function vCompute(d){
+  // d: {m, price, shares(억주), cap(조), profit(조), growth(%), lo, hi}
+  const r = {};
+  if (!(d.price>0) || !(d.shares>0) || !(d.profit>0)) return null;
+  const sh = d.shares*1e8;
+  r.mcap = d.price*sh/1e12;                       // 조
+  if (d.m==='pbr'){
+    if (!(d.cap>0)) return null;
+    r.fwdCap = d.cap + d.profit;
+    r.mult = r.mcap / r.fwdCap; r.unit='배 (F-PBR)';
+    r.bandPx = b => b*r.fwdCap*1e12/sh;
+  } else {
+    r.mult = r.mcap / d.profit; r.unit='배 (F-PER)';
+    r.bandPx = b => b*d.profit*1e12/sh;
+    if (d.m==='peg'){
+      if (!(d.growth>0)) return null;
+      r.peg = r.mult/d.growth; r.unit2='배 (PEG, 기준 1.0)';
+    }
+  }
+  if (d.lo>0 && d.hi>d.lo){
+    r.loPx = r.bandPx(d.m==='peg'? d.lo*d.growth : d.lo);
+    r.hiPx = r.bandPx(d.m==='peg'? d.hi*d.growth : d.hi);
+    const cur = d.m==='peg'? r.peg : r.mult;
+    r.pos = Math.max(0, Math.min(1, (cur-d.lo)/(d.hi-d.lo)));
+  }
+  return r;
+}
+function vRead(){
+  return {m:vM, name:document.getElementById('v-name').value.trim(),
+    price:vG('v-price'), shares:vG('v-shares'), cap:vG('v-cap'),
+    profit:vG('v-profit'), growth:vG('v-growth'), lo:vG('v-lo'), hi:vG('v-hi'),
+    key:document.getElementById('v-key').value.trim()};
+}
+function vOutHtml(d, r){
+  if (!r) return '필수: 주가·주식수·이익 추정' + (d.m==='pbr'?'·자본총계':'') + (d.m==='peg'?'·성장률':'') + '.';
+  const cur = d.m==='peg'? r.peg : r.mult;
+  let h = '<div style="color:var(--text)">시총 '+r.mcap.toFixed(1)+'조' +
+    (d.m==='pbr'? ' · 포워드 자본 <b style="color:var(--warn)">'+r.fwdCap.toFixed(1)+'조</b>':'') + '</div>';
+  h += '<div style="margin-top:4px;color:var(--text)">현재 <span style="font-size:20px;font-weight:800;color:var(--invest)">'+cur.toFixed(2)+'</span> <span style="color:var(--muted)">'+(d.m==='peg'? r.unit2 : r.unit)+'</span>'+(d.m==='peg'? ' <span style="color:var(--muted)">(F-PER '+r.mult.toFixed(0)+'배 ÷ 성장 '+d.growth+'%)</span>':'')+'</div>';
+  if (r.loPx){
+    const pct = Math.round(r.pos*100);
+    const col = r.pos<0.33?'var(--ok)':(r.pos>0.72?'var(--bad)':'var(--warn)');
+    h += '<div style="margin-top:8px;font-size:12.5px">밴드 '+d.lo+'~'+d.hi+' → 하단가 <b>'+vFmtWon(r.loPx)+'</b> · 상단가 <b>'+vFmtWon(r.hiPx)+'</b></div>';
+    h += '<div style="height:8px;border-radius:4px;background:var(--card2);margin-top:6px;position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:'+pct+'%;border-radius:4px;background:'+col+'"></div></div>';
+    h += '<div style="font-size:12px;margin-top:4px;color:'+col+';font-weight:700">밴드 내 위치 '+pct+'% — '+(r.pos<0.33?'하단권 (진입 검토 구간, 단 트리거 확인)':(r.pos>0.72?'상단권 (과열 — 1/3~1/2 익절 검토)':'중간 (손익비 우위 없음)'))+'</div>';
+  }
+  return h;
+}
+function vCalc(){
+  const d = vRead();
+  document.getElementById('v-out').innerHTML = vOutHtml(d, vCompute(d));
+}
+function vLoad(){ try{ return JSON.parse(localStorage.getItem('jr-vals')||'[]'); }catch(e){ return []; } }
+function vStore(a){ try{ localStorage.setItem('jr-vals', JSON.stringify(a)); }catch(e){} }
+function vSave(){
+  const d = vRead();
+  if (!d.name){ toast('종목명을 입력하세요','bad'); return; }
+  if (!d.key){ toast('룰 04 — 키팩터 한 문장을 못 쓰면 저장(매수)도 없다','bad'); return; }
+  if (!vCompute(d)){ toast('필수 숫자를 채우세요','bad'); return; }
+  const a = vLoad();
+  const now = new Date(); const pad=n=>String(n).padStart(2,'0');
+  d.t = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());
+  if (vEditId!==null){ d.id = vEditId; const i = a.findIndex(x=>x.id===vEditId); if(i>=0) a[i]=d; else a.push(d); }
+  else { d.id = Date.now(); a.push(d); }
+  vStore(a); vEditId = null; vClear(); renderVals(); toast('저장 완료','ok');
+}
+function vClear(){
+  ['v-name','v-price','v-shares','v-cap','v-profit','v-growth','v-lo','v-hi','v-key'].forEach(id=>document.getElementById(id).value='');
+  vEditId = null; vCalc();
+}
+function vEdit(id){
+  const d = vLoad().find(x=>x.id===id); if(!d) return;
+  vMode(d.m); vEditId = id;
+  const set=(i,v)=>document.getElementById(i).value = (v==null||isNaN(v))?'':v;
+  document.getElementById('v-name').value=d.name; document.getElementById('v-key').value=d.key;
+  set('v-price',d.price); set('v-shares',d.shares); set('v-cap',d.cap); set('v-profit',d.profit); set('v-growth',d.growth); set('v-lo',d.lo); set('v-hi',d.hi);
+  vCalc(); window.scrollTo(0,0);
+}
+function vDel(id){ vStore(vLoad().filter(x=>x.id!==id)); renderVals(); }
+function renderVals(){
+  const a = vLoad(), el = document.getElementById('v-list');
+  if (!a.length){ el.innerHTML = '<div class="card" style="color:var(--muted);font-size:13px">저장된 밸류 기록이 없습니다. 종목마다 계산해서 쌓아두면 나만의 밴드 노트가 된다.</div>'; return; }
+  el.innerHTML = a.slice().reverse().map(d=>{
+    const r = vCompute(d); if(!r) return '';
+    const cur = d.m==='peg'? r.peg : r.mult;
+    const mode = d.m==='pbr'?'PBR 포워드':(d.m==='per'?'PER 포워드':'PEG');
+    return '<div class="card" style="border-left:4px solid var(--invest)">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:16px">'+escapeHtml(d.name)+'</b><span style="font-size:11px;color:var(--muted)">'+d.t+' · '+mode+'</span></div>'+
+      '<div style="margin-top:6px;font-size:13.5px">'+vOutHtml(d,r)+'</div>'+
+      '<div style="font-size:12.5px;color:var(--warn);margin-top:8px">🔑 '+escapeHtml(d.key)+'</div>'+
+      '<div class="btn-row"><button class="btn ghost btn-sm" onclick="vEdit('+d.id+')">수정</button><button class="btn bad btn-sm" onclick="vDel('+d.id+')">삭제</button></div>'+
+    '</div>';
+  }).join('');
+}
 function lecShow(who){
   document.getElementById('lec-chae').style.display = who==='chae'?'':'none';
   document.getElementById('lec-gray').style.display = who==='gray'?'':'none';
@@ -1343,7 +1490,7 @@ function lecShow(who){
 }
 function jrReset(){ document.querySelectorAll('#jr-checklist .check-item').forEach(i=>i.classList.remove('checked')); jrVerdict(); }
 try{ const nv = localStorage.getItem('jr-nav-won'); if(nv) document.getElementById('jr-nav').value = nv; }catch(e){}
-jrCalc();
+jrCalc(); renderVals(); vCalc();
 </script>
 </body>
 </html>
