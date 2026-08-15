@@ -409,7 +409,7 @@
       <div><label>내년 순이익 추정 (조원)</label><input type="number" id="v-profit2" inputmode="decimal" step="0.1" placeholder="12M fwd용 (비우면 연말 기준)" oninput="vCalc()"></div>
       <div id="v-g-wrap" style="display:none"><label>이익 성장률 (%)</label><input type="number" id="v-growth" inputmode="decimal" placeholder="50" oninput="vCalc()"></div>
     </div>
-    <label>밸류 밴드 (강의 프리셋)</label>
+    <label>밸류 밴드 — 12M fwd 기준 (강의 프리셋)</label>
     <select id="v-band" onchange="vBandSel()"></select>
     <div id="v-band-custom" style="display:none;grid-template-columns:1fr 1fr;gap:0 10px">
       <div><label>밴드 하단 (배)</label><input type="number" id="v-lo" inputmode="decimal" step="0.1" placeholder="0.8" oninput="vCalc()"></div>
@@ -1484,7 +1484,7 @@ function vOutHtml(d, r){
     (d.m!=='pbr'&&r.fwdEarn? ' · 12M fwd 이익 <b style="color:var(--warn)">'+r.fwdEarn.toFixed(1)+'조</b>':'') + '</div>';
   h += '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">'+(r.has2
     ? '연중 경과 '+Math.round(r.p*100)+'% 반영 — 지금부터 12개월 기준'
-    : '⚠ 내년 추정 미입력 → 올해 연말 기준 ('+(12-Math.round(r.p*12))+'개월 fwd). 항상 12M로 보려면 내년 순이익을 넣어라')+'</div>';
+    : '⚠ 내년 추정 미입력 → 올해 연말 기준 ('+(12-Math.round(r.p*12))+'개월 fwd). 밴드는 12M fwd 기준이라 어긋난다 — 내년 순이익을 넣어라')+'</div>';
   h += '<div style="margin-top:4px;color:var(--text)">현재 <span style="font-size:20px;font-weight:800;color:var(--invest)">'+cur.toFixed(2)+'</span> <span style="color:var(--muted)">'+(d.m==='peg'? r.unit2 : r.unit)+'</span>'+(d.m==='peg'? ' <span style="color:var(--muted)">(F-PER '+r.mult.toFixed(0)+'배 ÷ 성장 '+d.growth+'%)</span>':'')+'</div>';
   if (r.loPx){
     const pct = Math.round(r.pos*100);
